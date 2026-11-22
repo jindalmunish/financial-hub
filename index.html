@@ -13,7 +13,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
 
-  <!-- Authentication: Master PIN & Biometric Access -->
+  <!-- Google Identity Services (GIS) Web SDK for Sign in with Google -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <style>
     /* ========================================================================= */
@@ -826,36 +827,32 @@
       </div>
       <h2 class="text-xl font-extrabold text-white mb-2">Private Portfolio Access</h2>
       <p class="text-xs text-slate-400 leading-relaxed mb-6">
-        This section contains private family wealth holdings, transactions, and net worth metrics. Access is restricted to authorized Gmail accounts.
+        This section contains private family wealth holdings, transactions, and net worth metrics. Access is cryptographically restricted to authorized Google accounts only.
       </p>
 
       <div class="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 mb-6 flex items-center justify-center gap-2.5">
         <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Owner Account: <strong class="text-white font-bold">jindalmunish@gmail.com</strong></span>
+        <span>Authorized Account: <strong class="text-white font-bold">jindalmunish@gmail.com</strong></span>
       </div>
 
-      <!-- Quick Master Unlock -->
-      <div class="space-y-4">
-        <div>
-          <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Enter Security PIN</label>
-          <input type="password" id="auth-pin-input" class="auth-pin-input" maxlength="6" value="1984" placeholder="1984" onkeydown="if(event.key==='Enter') unlockWithPin()" autofocus>
-        </div>
+      <!-- Real Google Sign In Button Container -->
+      <div id="g_id_onload"
+           data-client_id="115401741024-8cad70co6vq438kb8m9l1sp6ssgb3v8e.apps.googleusercontent.com"
+           data-context="signin"
+           data-ux_mode="popup"
+           data-callback="handleGoogleCredentialResponse"
+           data-auto_prompt="false">
+      </div>
+      <div class="g_id_signin flex justify-center mb-4"
+           data-type="standard"
+           data-shape="rectangular"
+           data-theme="filled_blue"
+           data-text="signin_with"
+           data-size="large"
+           data-logo_alignment="left">
+      </div>
 
-        <button onclick="unlockWithPin()" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-blue-600/30 transition active:scale-95 cursor-pointer">
-          ⚡ Unlock Portfolio
-        </button>
-
-        <button onclick="completePortfolioUnlock('Munish Jindal (Instant Owner Auth)')" class="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer">
-          <i class="fa-solid fa-fingerprint text-sm"></i>
-          <span>1-Click Instant Unlock (Munish Jindal)</span>
-        </button>
-
-        <span id="pin-error-msg" class="text-xs text-rose-400 font-semibold mt-2 block hidden">Invalid PIN. Please try again.</span>
-        
-        <div class="pt-2 text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
-          <i class="fa-solid fa-key text-[10px]"></i>
-          <span>Default Master PIN: <strong class="text-slate-300 font-mono">1984</strong></span>
-        </div>
+      <div id="auth-error-banner" class="hidden mt-4 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs text-rose-300 leading-relaxed text-left">
       </div>
     </div>
 
@@ -1031,17 +1028,6 @@
       }
     }
 
-    function unlockWithPin() {
-      var pinVal = document.getElementById('auth-pin-input').value.trim();
-      var errMsg = document.getElementById('pin-error-msg');
-      if (pinVal === MASTER_PIN || pinVal === "1984" || pinVal === "1234" || pinVal === "") {
-        errMsg.classList.add('hidden');
-        completePortfolioUnlock("Munish Jindal (Owner Auth)");
-      } else {
-        errMsg.classList.remove('hidden');
-      }
-    }
-
     function handleGoogleCredentialResponse(response) {
       try {
         // Decode JWT payload
@@ -1052,16 +1038,26 @@
         }).join(''));
         
         var payload = JSON.parse(jsonPayload);
-        var email = payload.email || "";
+        var email = (payload.email || "").toLowerCase().trim();
 
-        if (email.toLowerCase() === AUTHORIZED_EMAIL.toLowerCase() || email.includes("munish")) {
+        if (email === AUTHORIZED_EMAIL.toLowerCase()) {
+          var errBanner = document.getElementById('auth-error-banner');
+          if (errBanner) errBanner.classList.add('hidden');
           completePortfolioUnlock(payload.name + " (" + email + ")");
         } else {
-          alert("Access Denied: " + email + " is not authorized for this portfolio.");
+          var errBanner = document.getElementById('auth-error-banner');
+          if (errBanner) {
+            errBanner.innerHTML = '<div class="flex items-center gap-2 font-bold text-rose-400"><i class="fa-solid fa-circle-xmark text-sm"></i> Access Denied</div><div class="mt-1 text-slate-300">Signed in as: <span class="text-rose-300 font-bold">' + (email || 'unknown') + '</span><br>Access is strictly restricted to: <strong class="text-emerald-400">' + AUTHORIZED_EMAIL + '</strong>.</div>';
+            errBanner.classList.remove('hidden');
+          }
         }
       } catch (e) {
         console.error("Auth decoding error", e);
-        completePortfolioUnlock("Authorized User");
+        var errBanner = document.getElementById('auth-error-banner');
+        if (errBanner) {
+          errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1.5 text-rose-400"></i> Authentication parsing error. Please try again.';
+          errBanner.classList.remove('hidden');
+        }
       }
     }
 
