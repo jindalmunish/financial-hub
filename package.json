@@ -1,0 +1,11 @@
+{
+  "name": "mj-portfolio-engine",
+  "version": "1.0.0",
+  "description": "Investment Portfolio Tracker for Google Sheets & Web App",
+  "main": "src/core/index.js",
+  "scripts": {
+    "test": "node tests/test_all.js"
+  },
+  "author": "Antigravity",
+  "license": "Private"
+}

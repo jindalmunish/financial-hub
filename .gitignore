@@ -1,0 +1,10 @@
+.DS_Store
+node_modules/
+.clasprc.json
+Transection.csv
+*.csv
+.env
+.env.local
+portfolio_verified_payload.json
+
+
