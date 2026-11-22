@@ -18,7 +18,7 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  var template = HtmlService.createTemplateFromFile('Index');
+  var template = HtmlService.createTemplateFromFile('index');
   return template.evaluate()
     .setTitle('MJ Portfolio Hub')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
