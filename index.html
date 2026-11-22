@@ -1411,7 +1411,10 @@
                 setTimeout(function() { toast.classList.add('opacity-0', 'translate-y-4'); }, 3000);
               }
             }
-            if (data) renderAllData(data);
+            if (data && data.status !== 'ERROR') {
+              INITIAL_DATA = data;
+              renderAllData(data);
+            }
           })
           .withFailureHandler(function(err) {
             if (!isSilent && btn && icon && text) {
@@ -1449,6 +1452,18 @@
         });
 
       function finishRefresh(msg) {
+        var now = new Date();
+        var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        var ist = new Date(utc + (3600000 * 5.5));
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var dd = String(ist.getDate()).padStart(2, '0');
+        var mmm = months[ist.getMonth()];
+        var yyyy = ist.getFullYear();
+        var hh = String(ist.getHours()).padStart(2, '0');
+        var mm = String(ist.getMinutes()).padStart(2, '0');
+        var ss = String(ist.getSeconds()).padStart(2, '0');
+        INITIAL_DATA.updatedAt = dd + '-' + mmm + '-' + yyyy + ' ' + hh + ':' + mm + ':' + ss + ' IST';
+
         if (!isSilent && btn && icon && text) {
           icon.classList.remove('spinning');
           text.innerText = "Refresh Data";
@@ -1468,6 +1483,18 @@
 
       if (INITIAL_DATA && (INITIAL_DATA.macroFactors || INITIAL_DATA.factors)) {
         renderAllData(INITIAL_DATA);
+      }
+
+      // If running inside Google Apps Script, immediately sync latest sheet data on load
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(data) {
+            if (data && data.status !== 'ERROR') {
+              INITIAL_DATA = data;
+              renderAllData(data);
+            }
+          })
+          .triggerFastMarketRefresh();
       }
 
       // Live market auto-refresh during market hours

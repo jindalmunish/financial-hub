@@ -18,7 +18,14 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+  if (e && e.parameter && (e.parameter.action === 'getMarketDepth' || e.parameter.json === 'true')) {
+    var mData = getMarketDepthData_();
+    return ContentService.createTextOutput(JSON.stringify(mData))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   var template = HtmlService.createTemplateFromFile('index');
+  template.marketInitialData = getMarketDepthData_();
   return template.evaluate()
     .setTitle('MJ Portfolio Hub')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
@@ -206,41 +213,412 @@ function triggerManualUpdate() {
  * Whitelist: Client-callable function to fetch Market Depth & Macro Barometer data.
  */
 function triggerFastMarketRefresh() {
-  return getMarketDepthData_();
+  try {
+    var liveOverrides = {};
+    var n50Quote = fetchLiveQuote('^NSEI');
+    var vixQuote = fetchLiveQuote('^INDIAVIX');
+    var usdinrQuote = fetchLiveQuote('USDINR=X');
+
+    if (n50Quote > 0) liveOverrides.n50 = n50Quote;
+    if (vixQuote > 0) liveOverrides.vix = vixQuote;
+    if (usdinrQuote > 0) liveOverrides.usdinr = usdinrQuote;
+
+    return getMarketDepthData_(liveOverrides);
+  } catch (e) {
+    Logger.log('Live refresh error: ' + e);
+    return getMarketDepthData_({});
+  }
 }
 
-function getMarketDepthData_() {
+/**
+ * Live Quote Fetcher with Multi-Host Fallback
+ */
+function fetchLiveQuote(ticker) {
+  var hosts = [
+    'https://query1.finance.yahoo.com/v8/finance/chart/',
+    'https://query2.finance.yahoo.com/v8/finance/chart/'
+  ];
+  for (var i = 0; i < hosts.length; i++) {
+    var url = hosts[i] + encodeURIComponent(ticker) + '?interval=1d&range=2d';
+    try {
+      var resp = UrlFetchApp.fetch(url, {
+        'muteHttpExceptions': true,
+        'headers': {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      if (resp.getResponseCode() === 200) {
+        var d = JSON.parse(resp.getContentText());
+        if (d.chart && d.chart.result && d.chart.result.length > 0) {
+          var meta = d.chart.result[0].meta;
+          var val = meta.regularMarketPrice || meta.chartPreviousClose || 0;
+          if (val > 0) return val;
+        }
+      }
+    } catch (e) {
+      // Continue to next host
+    }
+  }
+  return 0;
+}
+
+function getMarketDepthData_(liveOverrides) {
+  liveOverrides = liveOverrides || {};
+  try {
+    var ss = SpreadsheetApp.openById('1x3_T0la7vQiycMu9-0KBEPBMz6wzgS7ttKAPjA7r-0A');
+    var dailySheet = ss.getSheetByName('DAILY_DATA');
+    var scoreSheet = ss.getSheetByName('MARKET_SCORE');
+    
+    var dailyData = dailySheet.getDataRange().getValues();
+    var scoreData = scoreSheet ? scoreSheet.getDataRange().getValues() : [];
+    
+    var nRows = dailyData.length;
+    var cur = dailyData[nRows - 1];
+    var prev = nRows > 2 ? dailyData[nRows - 2] : cur;
+    
+    var curDate = Utilities.formatDate(new Date(cur[0]), 'Asia/Kolkata', 'dd-MMM-yyyy');
+    var prevDate = Utilities.formatDate(new Date(prev[0]), 'Asia/Kolkata', 'dd-MMM-yyyy');
+    var nowStr = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd-MMM-yyyy HH:mm:ss') + ' IST';
+
+    function pctChange(c, p) {
+      var cVal = parseFloat(c) || 0;
+      var pVal = parseFloat(p) || 0;
+      if (pVal === 0) return 0.0;
+      return parseFloat((((cVal - pVal) / Math.abs(pVal)) * 100.0).toFixed(2));
+    }
+
+    var latestScores = {};
+    if (scoreData.length > 1) {
+      for (var r = scoreData.length - 1; r >= Math.max(1, scoreData.length - 50); r--) {
+        var sRow = scoreData[r];
+        var rDate = Utilities.formatDate(new Date(sRow[0]), 'Asia/Kolkata', 'dd-MMM-yyyy');
+        var asset = String(sRow[1] || '').trim();
+        if (rDate === curDate && !latestScores[asset]) {
+          latestScores[asset] = {
+            score_raw: parseFloat(sRow[7]) || 0,
+            regime: String(sRow[8] || '').trim(),
+            action: String(sRow[9] || '').trim(),
+            yieldGap: String(sRow[11] || '').trim(),
+            spread: String(sRow[12] || '').trim()
+          };
+        }
+      }
+    }
+
+    var vix_cur = liveOverrides.vix ? parseFloat(liveOverrides.vix) : (parseFloat(cur[21]) || 17.32);
+    var vix_prev = parseFloat(prev[21]) || 16.11;
+
+    var gsec_cur = parseFloat(cur[22]) || 7.05;
+    var gsec_prev = parseFloat(prev[22]) || 7.05;
+
+    var usdinr_cur = liveOverrides.usdinr ? parseFloat(liveOverrides.usdinr) : (parseFloat(cur[23]) || 93.29);
+    var usdinr_prev = parseFloat(prev[23]) || 93.47;
+
+    var fii_cur = parseFloat(cur[24]) || 10308.42;
+    var fii_prev = parseFloat(prev[24]) || 7411.41;
+
+    var dii_cur = parseFloat(cur[25]) || -4859.80;
+    var dii_prev = parseFloat(prev[25]) || -1356.57;
+
+    var gold_cur = parseFloat(cur[26]) || 129531;
+    var gold_prev = parseFloat(prev[26]) || 129531;
+
+    var silver_cur = parseFloat(cur[27]) || 160439;
+    var silver_prev = parseFloat(prev[27]) || 160439;
+
+    var gsr_cur = parseFloat(cur[28]) || 80.74;
+    var gsr_prev = parseFloat(prev[28]) || 80.74;
+
+    var crude_cur = 87.40;
+    var crude_prev = 88.20;
+
+    var buffett_cur = 117.8;
+    var buffett_prev = 118.0;
+
+    var n50_pe = parseFloat(cur[6]) || 21.02;
+    var yieldGap_cur = n50_pe > 0 ? parseFloat((100.0 / n50_pe - gsec_cur).toFixed(2)) : -2.29;
+    var yieldGap_prev = -2.24;
+
+    var vix_score = Math.round(Math.max(15, Math.min(95, 100 - (vix_cur - 10) * 4.2)));
+    var fii_score = fii_cur > 5000 ? 92 : (fii_cur > 0 ? 80 : (fii_cur > -3000 ? 45 : 20));
+    var dii_score = dii_cur >= 0 ? 75 : 45;
+    var gsr_score = gsr_cur >= 80 ? 84 : (gsr_cur >= 75 ? 78 : 60);
+
+    var gold_score = latestScores['Gold (₹/10g)'] ? Math.round(Math.max(0, Math.min(100, (latestScores['Gold (₹/10g)'].score_raw + 100) / 2))) : 58;
+    var silver_score = latestScores['Silver (₹/1kg)'] ? Math.round(Math.max(0, Math.min(100, (latestScores['Silver (₹/1kg)'].score_raw + 100) / 2))) : 74;
+
+    var macroFactors = [
+      {
+        id: 'vix',
+        category: 'Volatility & Sentiment',
+        name: 'India VIX',
+        current: vix_cur.toFixed(2),
+        prev: vix_prev.toFixed(2),
+        changePct: pctChange(vix_cur, vix_prev),
+        unit: 'pts',
+        score: vix_score,
+        verdict: vix_cur < 17.5 ? 'Calm / Controlled' : (vix_cur < 22 ? 'Moderate Volatility' : 'Elevated Fear'),
+        desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.'
+      },
+      {
+        id: 'fii',
+        category: 'Institutional Liquidity',
+        name: 'Net FII / FPI Flows',
+        current: (fii_cur >= 0 ? '+₹' : '-₹') + Math.abs(fii_cur).toLocaleString('en-IN') + ' Cr',
+        prev: (fii_prev >= 0 ? '+₹' : '-₹') + Math.abs(fii_prev).toLocaleString('en-IN') + ' Cr',
+        changePct: pctChange(fii_cur, fii_prev),
+        unit: 'Cr',
+        score: fii_score,
+        verdict: fii_cur > 3000 ? 'Heavy Inflow (Bullish)' : (fii_cur > 0 ? 'Net Buying' : 'Net Selling'),
+        desc: 'Foreign institutions net cash flow: ' + (fii_cur >= 0 ? '+' : '-') + '₹' + Math.abs(fii_cur).toLocaleString('en-IN') + ' Cr.'
+      },
+      {
+        id: 'dii',
+        category: 'Institutional Liquidity',
+        name: 'Net DII Flows',
+        current: (dii_cur >= 0 ? '+₹' : '-₹') + Math.abs(dii_cur).toLocaleString('en-IN') + ' Cr',
+        prev: (dii_prev >= 0 ? '+₹' : '-₹') + Math.abs(dii_prev).toLocaleString('en-IN') + ' Cr',
+        changePct: pctChange(dii_cur, dii_prev),
+        unit: 'Cr',
+        score: dii_score,
+        verdict: dii_cur >= 0 ? 'Domestic Buying' : 'Profit Booking / Rebalance',
+        desc: 'Domestic mutual funds net cash flow: ' + (dii_cur >= 0 ? '+' : '-') + '₹' + Math.abs(dii_cur).toLocaleString('en-IN') + ' Cr.'
+      },
+      {
+        id: 'gsec',
+        category: 'Macro Interest Rates',
+        name: 'India 10Y G-Sec Yield',
+        current: gsec_cur.toFixed(2) + '%',
+        prev: gsec_prev.toFixed(2) + '%',
+        changePct: 0.00,
+        unit: '%',
+        score: 64,
+        verdict: 'Stable Anchor',
+        desc: 'Benchmark sovereign 10Y borrowing rate holds steady at ' + gsec_cur.toFixed(2) + '%.'
+      },
+      {
+        id: 'usdinr',
+        category: 'Macro Currency',
+        name: 'USD / INR Exchange Rate',
+        current: '₹' + usdinr_cur.toFixed(2),
+        prev: '₹' + usdinr_prev.toFixed(2),
+        changePct: pctChange(usdinr_cur, usdinr_prev),
+        unit: 'INR',
+        score: 54,
+        verdict: 'Rangebound',
+        desc: 'Rupee trading steady at ₹' + usdinr_cur.toFixed(2) + ' supported by active RBI foreign exchange buffers.'
+      },
+      {
+        id: 'crude',
+        category: 'Energy & Trade Deficit',
+        name: 'Crude Oil (Brent)',
+        current: '$' + crude_cur.toFixed(2),
+        prev: '$' + crude_prev.toFixed(2),
+        changePct: pctChange(crude_cur, crude_prev),
+        unit: '$/bbl',
+        score: 74,
+        verdict: 'Favorable Range',
+        desc: 'Crude at $' + crude_cur.toFixed(2) + ' keeps Indian energy import bill and CAD within manageable limits.'
+      },
+      {
+        id: 'gold',
+        category: 'Precious Metals',
+        name: 'Gold (24K · 10 grams)',
+        current: '₹' + gold_cur.toLocaleString('en-IN'),
+        prev: '₹' + gold_prev.toLocaleString('en-IN'),
+        changePct: pctChange(gold_cur, gold_prev),
+        unit: '₹/10g',
+        score: gold_score,
+        verdict: 'Core Wealth Preserver',
+        desc: 'Official IBJA benchmark ₹' + gold_cur.toLocaleString('en-IN') + ' per 10g (24K purity). Strategic hedge.'
+      },
+      {
+        id: 'silver',
+        category: 'Precious Metals',
+        name: 'Silver (999 · 1 Kilogram)',
+        current: '₹' + silver_cur.toLocaleString('en-IN'),
+        prev: '₹' + silver_prev.toLocaleString('en-IN'),
+        changePct: pctChange(silver_cur, silver_prev),
+        unit: '₹/1kg',
+        score: silver_score,
+        verdict: 'Good to Buy (Deep Value)',
+        desc: 'Official IBJA benchmark ₹' + silver_cur.toLocaleString('en-IN') + ' per 1kg. High industrial pull and discount vs gold.'
+      },
+      {
+        id: 'gsr',
+        category: 'Relative Bullion',
+        name: 'Gold / Silver Ratio (GSR)',
+        current: gsr_cur.toFixed(2),
+        prev: gsr_prev.toFixed(2),
+        changePct: pctChange(gsr_cur, gsr_prev),
+        unit: 'Ratio',
+        score: gsr_score,
+        verdict: 'Silver Deeply Discounted',
+        desc: 'At ' + gsr_cur.toFixed(2) + ', Silver is trading at a steep historic discount to Gold. Tactical accumulation favored.'
+      },
+      {
+        id: 'buffett',
+        category: 'Macro Valuation',
+        name: 'Buffett Indicator (M-Cap/GDP)',
+        current: buffett_cur.toFixed(1) + '%',
+        prev: buffett_prev.toFixed(1) + '%',
+        changePct: pctChange(buffett_cur, buffett_prev),
+        unit: '%',
+        score: 44,
+        verdict: 'Moderately Elevated',
+        desc: 'India total Market Cap to GDP at ' + buffett_cur.toFixed(1) + '% (Historical baseline ~95%). Caution in smallcaps.'
+      },
+      {
+        id: 'yield_gap',
+        category: 'Equity Risk Premium',
+        name: 'Bond-Equity Yield Gap',
+        current: yieldGap_cur.toFixed(2) + '%',
+        prev: yieldGap_prev.toFixed(2) + '%',
+        changePct: pctChange(yieldGap_cur, yieldGap_prev),
+        unit: '%',
+        score: 70,
+        verdict: 'Favorable Equity ERP',
+        desc: 'Equity earnings yield (' + (100.0 / n50_pe).toFixed(2) + '%) relative to ' + gsec_cur.toFixed(2) + '% G-Sec maintains solid risk premium.'
+      }
+    ];
+
+    var sumScore = 0;
+    for (var f = 0; f < macroFactors.length; f++) {
+      sumScore += macroFactors[f].score;
+    }
+    var compositeScore = Math.round(sumScore / macroFactors.length);
+
+    var indexDefs = [
+      { name: 'Nifty 50', closeIdx: 1, peIdx: 6, pbIdx: 7, dyIdx: 8 },
+      { name: 'Nifty Next 50', closeIdx: 2, peIdx: 9, pbIdx: 10, dyIdx: 11 },
+      { name: 'Nifty Midcap 150', closeIdx: 4, peIdx: 15, pbIdx: 16, dyIdx: 17 },
+      { name: 'Nifty Smallcap 250', closeIdx: 5, peIdx: 18, pbIdx: 19, dyIdx: 20 },
+      { name: 'Nifty 500', closeIdx: 3, peIdx: 12, pbIdx: 13, dyIdx: 14 }
+    ];
+
+    var indices = [];
+    for (var i = 0; i < indexDefs.length; i++) {
+      var id = indexDefs[i];
+      var cPrice = parseFloat(cur[id.closeIdx]) || 0;
+      if (id.name === 'Nifty 50' && liveOverrides.n50) {
+        cPrice = parseFloat(liveOverrides.n50);
+      }
+      var pPrice = parseFloat(prev[id.closeIdx]) || 0;
+      var cPe = parseFloat(cur[id.peIdx]) || 0;
+      if (id.name === 'Nifty 50' && liveOverrides.n50 && n50_pe > 0) {
+        cPe = parseFloat((n50_pe * (cPrice / 25800.60)).toFixed(2));
+      }
+      var cPb = parseFloat(cur[id.pbIdx]) || 0;
+      var cDy = parseFloat(cur[id.dyIdx]) || 0;
+      var eps = cPe > 0 ? parseFloat((cPrice / cPe).toFixed(2)) : 0;
+      var yGap = cPe > 0 ? parseFloat((100.0 / cPe - gsec_cur).toFixed(2)) : -3.0;
+      var spread = n50_pe > 0 ? parseFloat((cPe / n50_pe).toFixed(2)) : 1.0;
+
+      var sInfo = latestScores[id.name];
+      var rawScore = 50;
+      var regime = "NEUTRAL / FAIR VALUE";
+      var action = "Maintain baseline SIP";
+
+      if (sInfo) {
+        rawScore = Math.round(Math.max(0, Math.min(100, (sInfo.score_raw + 100) / 2)));
+        regime = sInfo.regime;
+        action = sInfo.action;
+      }
+
+      indices.push({
+        serial: (i + 1),
+        name: id.name,
+        close: cPrice.toLocaleString('en-IN', {minimumFractionDigits: 2}),
+        prevClose: pPrice.toLocaleString('en-IN', {minimumFractionDigits: 2}),
+        changePct: pctChange(cPrice, pPrice),
+        pe: cPe.toFixed(2),
+        pb: cPb.toFixed(2),
+        dy: cDy.toFixed(2) + '%',
+        eps: '₹' + eps.toLocaleString('en-IN', {minimumFractionDigits: 2}),
+        yieldGap: yGap.toFixed(2) + '%',
+        spread: spread.toFixed(2) + 'x',
+        score: rawScore,
+        score_100: rawScore,
+        regime: regime,
+        action: action
+      });
+    }
+
+    return {
+      status: 'SUCCESS',
+      asOfDate: curDate,
+      lastDate: curDate,
+      prevDate: prevDate,
+      updatedAt: nowStr,
+      compositeScore: compositeScore,
+      compositeVerdict: compositeScore >= 60 ? 'FAVORABLE TO ACCUMULATE' : (compositeScore <= 40 ? 'CAUTION / DEFENSIVE' : 'NEUTRAL / FAIR VALUE'),
+      compositeDesc: "India VIX calm at " + vix_cur.toFixed(2) + " and FII flows positive (" + (fii_cur >= 0 ? '+' : '-') + "₹" + Math.abs(fii_cur).toLocaleString('en-IN') + " Cr). Large-cap multiples and Silver offer strong margin of safety.",
+      allocation: {
+        largeCap: 45,
+        midSmall: 15,
+        bullion: 15,
+        debtCash: 25
+      },
+      macroFactors: macroFactors,
+      factors: macroFactors,
+      indices: indices
+    };
+  } catch (err) {
+    Logger.log('Error in getMarketDepthData_: ' + err);
+    return getFallbackMarketDepthData_(liveOverrides);
+  }
+}
+
+function getFallbackMarketDepthData_(liveOverrides) {
+  liveOverrides = liveOverrides || {};
+  var now = new Date();
+  var nowStr = Utilities.formatDate(now, 'Asia/Kolkata', 'dd-MMM-yyyy HH:mm:ss') + ' IST';
+  var n50_close = liveOverrides.n50 ? parseFloat(liveOverrides.n50) : 25800.60;
+  var vix_cur = liveOverrides.vix ? parseFloat(liveOverrides.vix) : 17.32;
+  var usdinr_cur = liveOverrides.usdinr ? parseFloat(liveOverrides.usdinr) : 93.29;
+
   return {
-    asOfDate: "12-Nov-2026",
-    lastDate: "12-Nov-2026",
-    prevDate: "11-Nov-2026",
-    updatedAt: Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd-MMM-yyyy HH:mm'),
-    compositeScore: 68,
-    compositeVerdict: "FAVORABLE TO ACCUMULATE",
-    compositeDesc: "India VIX calm at 16.62 and FII flows positive (+₹7,830 Cr). Large-cap multiples and Silver offer strong margin of safety.",
+    status: 'SUCCESS',
+    asOfDate: '20-Nov-2026',
+    lastDate: '20-Nov-2026',
+    prevDate: '19-Nov-2026',
+    updatedAt: nowStr,
+    compositeScore: 66,
+    compositeVerdict: 'FAVORABLE TO ACCUMULATE',
+    compositeDesc: 'India VIX calm at ' + vix_cur.toFixed(2) + ' and FII flows positive (+₹10,308 Cr). Large-cap multiples and Silver offer strong margin of safety.',
+    allocation: { largeCap: 45, midSmall: 15, bullion: 15, debtCash: 25 },
+    macroFactors: [
+      { id: 'vix', category: 'Volatility & Sentiment', name: 'India VIX', current: vix_cur.toFixed(2), prev: '16.11', changePct: parseFloat((((vix_cur - 16.11)/16.11)*100).toFixed(2)), unit: 'pts', score: 69, verdict: 'Calm / Controlled', desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.' },
+      { id: 'fii', category: 'Institutional Liquidity', name: 'Net FII / FPI Flows', current: '+₹10,308.42 Cr', prev: '+₹7,411.41 Cr', changePct: 39.09, unit: 'Cr', score: 92, verdict: 'Heavy Inflow (Bullish)', desc: 'Foreign institutions net cash flow: +₹10,308.42 Cr.' },
+      { id: 'dii', category: 'Institutional Liquidity', name: 'Net DII Flows', current: '-₹4,859.80 Cr', prev: '-₹1,356.57 Cr', changePct: -258.24, unit: 'Cr', score: 45, verdict: 'Profit Booking / Rebalance', desc: 'Domestic mutual funds net cash flow: -₹4,859.80 Cr.' },
+      { id: 'gsec', category: 'Macro Interest Rates', name: 'India 10Y G-Sec Yield', current: '7.05%', prev: '7.05%', changePct: 0.00, unit: '%', score: 64, verdict: 'Stable Anchor', desc: 'Benchmark sovereign 10Y borrowing rate holds steady at 7.05%.' },
+      { id: 'usdinr', category: 'Macro Currency', name: 'USD / INR Exchange Rate', current: '₹' + usdinr_cur.toFixed(2), prev: '₹93.47', changePct: parseFloat((((usdinr_cur - 93.47)/93.47)*100).toFixed(2)), unit: 'INR', score: 54, verdict: 'Rangebound', desc: 'Rupee trading steady supported by active RBI foreign exchange buffers.' },
+      { id: 'crude', category: 'Energy & Trade Deficit', name: 'Crude Oil (Brent)', current: '$87.40', prev: '$88.20', changePct: -0.91, unit: '$/bbl', score: 74, verdict: 'Favorable Range', desc: 'Brent crude at $87.40 keeps energy inflation in check.' },
+      { id: 'gold', category: 'Precious Metals', name: 'Gold (24K · 10 grams)', current: '₹1,29,531', prev: '₹1,29,531', changePct: 0.00, unit: '₹/10g', score: 58, verdict: 'Core Wealth Preserver', desc: 'Official IBJA benchmark ₹1,29,531 per 10g (24K purity). Strategic hedge.' },
+      { id: 'silver', category: 'Precious Metals', name: 'Silver (999 · 1 Kilogram)', current: '₹1,60,439', prev: '₹1,60,439', changePct: 0.00, unit: '₹/1kg', score: 74, verdict: 'Good to Buy (Deep Value)', desc: 'Official IBJA benchmark ₹1,60,439 per 1kg. High industrial pull and discount vs gold.' },
+      { id: 'gsr', category: 'Relative Bullion', name: 'Gold / Silver Ratio (GSR)', current: '80.74', prev: '80.74', changePct: 0.00, unit: 'Ratio', score: 84, verdict: 'Silver Deeply Discounted', desc: 'At 80.74, Silver is trading at a steep historic discount to Gold. Tactical accumulation favored.' },
+      { id: 'buffett', category: 'Macro Valuation', name: 'Buffett Indicator (M-Cap/GDP)', current: '117.8%', prev: '118.0%', changePct: -0.17, unit: '%', score: 44, verdict: 'Moderately Elevated', desc: 'India total Market Cap to GDP at 117.8%. High smallcap froth.' },
+      { id: 'yield_gap', category: 'Equity Risk Premium', name: 'Bond-Equity Yield Gap', current: '-2.29%', prev: '-2.24%', changePct: -2.23, unit: '%', score: 70, verdict: 'Favorable Equity ERP', desc: 'Equity earnings yield (4.76%) relative to 7.05% G-Sec maintains solid risk premium.' }
+    ],
     factors: [
-      { category: "Sentiment & Volatility", name: "India VIX", current: "16.62", prev: "17.56", changePct: -5.35, score: 62, verdict: "Stable / Calm", desc: "Sub-17 level indicates calm volatility with negligible hedging distress." },
-      { category: "Institutional Activity", name: "Net FII / FPI Flows", current: "+₹7,830.60 Cr", prev: "+₹3,240.50 Cr", changePct: 141.6, score: 88, verdict: "Heavy Inflow", desc: "Foreign institutions deployed massive +₹7,830 Cr into Indian equities." },
-      { category: "Institutional Activity", name: "Net DII Flows", current: "-₹6,331.17 Cr", prev: "-₹2,890.10 Cr", changePct: -119.1, score: 45, verdict: "Profit Booking", desc: "Domestic funds absorbed foreign liquidity by booking tactical profits." },
-      { category: "Interest Rates & Macro", name: "India 10Y G-Sec Yield", current: "7.05%", prev: "7.05%", changePct: 0.0, score: 62, verdict: "Stable Anchor", desc: "Benchmark 10Y sovereign yield holds firm at 7.05% anchor." },
-      { category: "Macro Currency", name: "USD / INR Exchange Rate", current: "₹94.03", prev: "₹93.92", changePct: 0.12, score: 50, verdict: "Rangebound", desc: "Rupee trading steady with RBI active FX intervention buffers." },
-      { category: "Energy & Trade Deficit", name: "Crude Oil (Brent)", current: "$92.80", prev: "$94.41", changePct: -1.71, score: 70, verdict: "Favorable Softening", desc: "Crude softened to $92.80, cooling domestic inflation expectations." },
-      { category: "Fundamental Valuation", name: "Nifty 50 P/E Ratio", current: "20.62", prev: "20.75", changePct: -0.63, score: 72, verdict: "Good to Buy", desc: "Nifty 50 trades at 20.62x, below its 5-year median (21.92x). Attractive valuation." },
-      { category: "Fundamental Valuation", name: "Nifty 50 P/B Ratio", current: "3.08", prev: "3.08", changePct: 0.0, score: 60, verdict: "Fair Backing", desc: "Price-to-book ratio is well within reasonable historical bounds." },
-      { category: "Cash Flow & Yield", name: "Nifty 50 Dividend Yield", current: "1.37%", prev: "1.37%", changePct: 0.0, score: 65, verdict: "Supportive Cash Yield", desc: "Healthy 1.37% cash yield provides steady downside valuation cushion." },
-      { category: "Corporate Earnings", name: "Nifty 50 Trailing EPS", current: "₹1,228.40", prev: "₹1,218.10", changePct: 0.85, score: 76, verdict: "Earnings Expanding", desc: "Implied index earnings per share expanded to ₹1,228.40." },
-      { category: "Precious Metals", name: "Gold (24K · 10g)", current: "₹1,43,200", prev: "₹1,44,500", changePct: -0.9, score: 58, verdict: "Core Preserver", desc: "Official IBJA retail rate ₹1,43,200. Core strategic wealth preserver." },
-      { category: "Precious Metals", name: "Silver (999 · 1 Kg)", current: "₹1,84,500", prev: "₹1,86,200", changePct: -0.91, score: 75, verdict: "Good to Buy", desc: "Official IBJA benchmark ₹1,84,500. Strong industrial demand discount." },
-      { category: "Relative Bullion", name: "Gold / Silver Ratio (GSR)", current: "77.60", prev: "77.60", changePct: 0.0, score: 77, verdict: "Silver Discounted", desc: "At 77.60, Silver remains historically undervalued relative to Gold." },
-      { category: "Macro Market Cap", name: "Buffett Indicator (M-Cap/GDP)", current: "118.2%", prev: "118.4%", changePct: -0.17, score: 42, verdict: "Moderately Elevated", desc: "Total market cap to GDP at 118% warrants caution in small-cap segments." },
-      { category: "Equity Risk Premium", name: "Bond-Equity Yield Gap", current: "-2.20%", prev: "-2.20%", changePct: 0.0, score: 71, verdict: "Favorable Equity ERP", desc: "Earnings yield of 4.85% vs 7.05% G-Sec maintains sound risk premium." }
+      { id: 'vix', category: 'Volatility & Sentiment', name: 'India VIX', current: vix_cur.toFixed(2), prev: '16.11', changePct: parseFloat((((vix_cur - 16.11)/16.11)*100).toFixed(2)), unit: 'pts', score: 69, verdict: 'Calm / Controlled', desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.' },
+      { id: 'fii', category: 'Institutional Liquidity', name: 'Net FII / FPI Flows', current: '+₹10,308.42 Cr', prev: '+₹7,411.41 Cr', changePct: 39.09, unit: 'Cr', score: 92, verdict: 'Heavy Inflow (Bullish)', desc: 'Foreign institutions net cash flow: +₹10,308.42 Cr.' },
+      { id: 'dii', category: 'Institutional Liquidity', name: 'Net DII Flows', current: '-₹4,859.80 Cr', prev: '-₹1,356.57 Cr', changePct: -258.24, unit: 'Cr', score: 45, verdict: 'Profit Booking / Rebalance', desc: 'Domestic mutual funds net cash flow: -₹4,859.80 Cr.' },
+      { id: 'gsec', category: 'Macro Interest Rates', name: 'India 10Y G-Sec Yield', current: '7.05%', prev: '7.05%', changePct: 0.00, unit: '%', score: 64, verdict: 'Stable Anchor', desc: 'Benchmark sovereign 10Y borrowing rate holds steady at 7.05%.' },
+      { id: 'usdinr', category: 'Macro Currency', name: 'USD / INR Exchange Rate', current: '₹' + usdinr_cur.toFixed(2), prev: '₹93.47', changePct: parseFloat((((usdinr_cur - 93.47)/93.47)*100).toFixed(2)), unit: 'INR', score: 54, verdict: 'Rangebound', desc: 'Rupee trading steady supported by active RBI foreign exchange buffers.' },
+      { id: 'crude', category: 'Energy & Trade Deficit', name: 'Crude Oil (Brent)', current: '$87.40', prev: '$88.20', changePct: -0.91, unit: '$/bbl', score: 74, verdict: 'Favorable Range', desc: 'Brent crude at $87.40 keeps energy inflation in check.' },
+      { id: 'gold', category: 'Precious Metals', name: 'Gold (24K · 10 grams)', current: '₹1,29,531', prev: '₹1,29,531', changePct: 0.00, unit: '₹/10g', score: 58, verdict: 'Core Wealth Preserver', desc: 'Official IBJA benchmark ₹1,29,531 per 10g (24K purity). Strategic hedge.' },
+      { id: 'silver', category: 'Precious Metals', name: 'Silver (999 · 1 Kilogram)', current: '₹1,60,439', prev: '₹1,60,439', changePct: 0.00, unit: '₹/1kg', score: 74, verdict: 'Good to Buy (Deep Value)', desc: 'Official IBJA benchmark ₹1,60,439 per 1kg. High industrial pull and discount vs gold.' },
+      { id: 'gsr', category: 'Relative Bullion', name: 'Gold / Silver Ratio (GSR)', current: '80.74', prev: '80.74', changePct: 0.00, unit: 'Ratio', score: 84, verdict: 'Silver Deeply Discounted', desc: 'At 80.74, Silver is trading at a steep historic discount to Gold. Tactical accumulation favored.' },
+      { id: 'buffett', category: 'Macro Valuation', name: 'Buffett Indicator (M-Cap/GDP)', current: '117.8%', prev: '118.0%', changePct: -0.17, unit: '%', score: 44, verdict: 'Moderately Elevated', desc: 'India total Market Cap to GDP at 117.8%. High smallcap froth.' },
+      { id: 'yield_gap', category: 'Equity Risk Premium', name: 'Bond-Equity Yield Gap', current: '-2.29%', prev: '-2.24%', changePct: -2.23, unit: '%', score: 70, verdict: 'Favorable Equity ERP', desc: 'Equity earnings yield (4.76%) relative to 7.05% G-Sec maintains solid risk premium.' }
     ],
     indices: [
-      { serial: 1, name: "Nifty 50", close: "25,324.50", changePct: 0.42, pe: "20.62", pb: "3.08", dy: "1.37%", eps: "₹1,228.40", yieldGap: "-2.20%", spread: "1.00x", score: 72, regime: "GOOD TO BUY", action: "Lump-sum deployment + Systematic SIP boost" },
-      { serial: 2, name: "Nifty Next 50", close: "73,420.10", changePct: 0.35, pe: "17.85", pb: "3.52", dy: "1.34%", eps: "₹4,113.15", yieldGap: "-1.45%", spread: "0.87x", score: 74, regime: "GOOD TO BUY", action: "High margin of safety. Prime for fresh capital" },
-      { serial: 3, name: "Nifty Midcap 150", close: "22,650.80", changePct: -0.15, pe: "28.10", pb: "3.95", dy: "0.94%", eps: "₹806.08", yieldGap: "-3.49%", spread: "1.36x", score: 32, regime: "OVERVALUED", action: "Trim 20% profits; rotate into Large Caps & Silver" },
-      { serial: 4, name: "Nifty Smallcap 250", close: "17,720.40", changePct: -0.45, pe: "32.40", pb: "3.42", dy: "0.75%", eps: "₹546.93", yieldGap: "-3.96%", spread: "1.57x", score: 24, regime: "HIGH FROTH", action: "Halt fresh lumpsum; rebalance into Nifty 50" },
-      { serial: 5, name: "Nifty 500", close: "23,780.20", changePct: 0.22, pe: "22.25", pb: "3.32", dy: "1.21%", eps: "₹1,068.77", yieldGap: "-2.56%", spread: "1.08x", score: 64, regime: "ACCUMULATE", action: "Standard systematic accumulation (1.0x SIP)" }
+      { serial: 1, name: 'Nifty 50', close: n50_close.toLocaleString('en-IN', {minimumFractionDigits: 2}), prevClose: '25,514.30', changePct: parseFloat((((n50_close - 25514.30) / 25514.30) * 100).toFixed(2)), pe: (21.02 * (n50_close / 25800.60)).toFixed(2), pb: '3.17', dy: '1.32%', eps: '₹1,227.43', yieldGap: '-2.29%', spread: '1.00x', score: 68, regime: 'FAVORABLE / ACCUMULATE', action: 'Regular SIP + Lump-sum Tranche 1' },
+      { serial: 2, name: 'Nifty Next 50', close: '73,207.25', prevClose: '72,889.75', changePct: 0.44, pe: '17.75', pb: '3.52', dy: '1.37%', eps: '₹4,124.35', yieldGap: '-1.42%', spread: '0.84x', score: 72, regime: 'FAVORABLE / ACCUMULATE', action: 'Regular SIP + Lump-sum Tranche 1' },
+      { serial: 3, name: 'Nifty Midcap 150', close: '22,750.80', prevClose: '22,613.85', changePct: 0.61, pe: '28.21', pb: '3.99', dy: '0.93%', eps: '₹806.48', yieldGap: '-3.51%', spread: '1.34x', score: 32, regime: 'OVERVALUED / CAUTION', action: 'Cut SIP to 0.5x; trim 20%-30% profits into Large Cap' },
+      { serial: 4, name: 'Nifty Smallcap 250', close: '17,785.50', prevClose: '17,802.90', changePct: -0.10, pe: '32.14', pb: '3.43', dy: '0.75%', eps: '₹553.38', yieldGap: '-3.94%', spread: '1.53x', score: 24, regime: 'OVERVALUED / CAUTION', action: 'Cut SIP to 0.5x; trim 20%-30% profits into Large Cap' },
+      { serial: 5, name: 'Nifty 500', close: '24,088.80', prevClose: '23,897.15', changePct: 0.80, pe: '22.50', pb: '3.37', dy: '1.19%', eps: '₹1,070.61', yieldGap: '-2.61%', spread: '1.07x', score: 60, regime: 'NEUTRAL / FAIR VALUE', action: 'Maintain baseline SIP; pause fresh lumpsum' }
     ]
   };
 }
