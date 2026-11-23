@@ -34,29 +34,16 @@ function doGet(e) {
 
 /**
  * Whitelist: Client-callable function to fetch portfolio dashboard data.
- * Optimized for blazing fast (~1 sec) sub-second loading by reading master ledger & calculating in-memory.
+ * Optimized for blazing fast (<1.5 sec) loading by reading master ledger & calculating in-memory.
  */
-function getDashboardData() {
+function getDashboardData(pricesOverride) {
   var ss = getSpreadsheet_();
 
   // 1. Read master transactions ledger once
   var txRecords = readTransectionTab_(ss);
 
-  // 2. Read prices cache
-  var prices = {};
-  try {
-    var pSheet = ss.getSheetByName('Prices');
-    if (pSheet && pSheet.getLastRow() > 1) {
-      var pVals = pSheet.getRange(2, 1, pSheet.getLastRow() - 1, 4).getValues();
-      for (var p = 0; p < pVals.length; p++) {
-        var key = String(pVals[p][0] || '').trim();
-        var price = parseFloat(pVals[p][2]) || 0;
-        if (key && price > 0) {
-          prices[key] = { price: price, nav: price };
-        }
-      }
-    }
-  } catch (e) {}
+  // 2. Read prices (from passed override or Prices tab)
+  var prices = pricesOverride || readPricesMap_(ss);
 
   // 3. Run pure in-memory calculation engine (takes ~15ms!)
   var calcResult = calculatePortfolioEngine_(txRecords, prices);
@@ -202,11 +189,57 @@ function getDashboardData() {
 }
 
 /**
- * Whitelist: Client-callable function to trigger a full update with live NAV/prices.
+ * Helper: Reads the Prices tab into a multi-keyed lookup dictionary.
+ */
+function readPricesMap_(ss) {
+  var prices = {};
+  try {
+    var pSheet = ss.getSheetByName('Prices');
+    if (pSheet && pSheet.getLastRow() > 1) {
+      var pVals = pSheet.getRange(2, 1, pSheet.getLastRow() - 1, 6).getValues();
+      for (var p = 0; p < pVals.length; p++) {
+        var instName = String(pVals[p][0] || '').trim();
+        var typ = String(pVals[p][1] || '').trim();
+        var codeSym = String(pVals[p][2] || '').trim();
+        var price = parseFloat(pVals[p][3]) || 0;
+        var dateStr = String(pVals[p][4] || '').trim();
+
+        if (price > 0) {
+          if (typ === 'MF') {
+            prices['MF_' + codeSym] = { nav: price, price: price, date: dateStr, name: instName };
+            prices['MF_' + instName] = { nav: price, price: price, date: dateStr, name: instName };
+          } else if (typ === 'Shares') {
+            prices['SHARE_' + instName] = { price: price, nav: price, date: dateStr };
+            prices['SHARE_' + codeSym] = { price: price, nav: price, date: dateStr };
+          } else if (typ === 'PPF') {
+            prices['PPF_' + instName] = { price: price, nav: price, date: dateStr };
+          }
+          prices[instName] = { price: price, nav: price, date: dateStr };
+          prices[codeSym] = { price: price, nav: price, date: dateStr };
+        }
+      }
+    }
+  } catch (e) {
+    Logger.log('Error reading Prices tab: ' + e.message);
+  }
+  return prices;
+}
+
+/**
+ * Whitelist: Client-callable function to trigger a fast live update with latest NAV/prices.
+ * Fetches quotes in parallel (<1.5s) and recalculates in-memory immediately.
  */
 function triggerManualUpdate() {
-  runUpdateNow();
-  return getDashboardData();
+  var ss = getSpreadsheet_();
+  var prices = updatePricesAndNAV_(ss);
+  return getDashboardData(prices);
+}
+
+/**
+ * Whitelist: Client-callable function to execute full background Google Sheet tabs sync.
+ */
+function runFullSpreadsheetSync() {
+  return runUpdateNow();
 }
 
 /**

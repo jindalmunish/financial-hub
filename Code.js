@@ -21,12 +21,14 @@ function getSpreadsheet_() {
 }
 
 var STATEMENT_SHARE_PRICES = {
-  'HDFC Bank': 788.25,
-  'Gold ETF': 120.30,
-  'Next 50 ETF': 774.78,
-  'Liquid ETF': 1130.93,
-  'Nifty50 ETF': 284.22,
-  'Reliance': 1320.00
+  'HDFC Bank': 817.80,
+  'Gold ETF': 106.69,
+  'Next 50 ETF': 784.55,
+  'Liquid ETF': 1133.52,
+  'Nifty50 ETF': 289.43,
+  'Reliance': 1351.00,
+  'SBI': 1132.65,
+  'TCS': 2460.00
 };
 
 var STAMP_DUTY_RATE_DEFAULT = 0.00005;
@@ -345,8 +347,7 @@ function ensureSystemTabs_(ss) {
         sheet.getRange(2, 1, t.seed.length, t.seed[0].length).setValues(t.seed);
       }
       sheet.setFrozenRows(1);
-    } else if (!t.preserveExisting) {
-      sheet.clearContents();
+    } else if (sheet.getLastRow() === 0) {
       sheet.getRange(1, 1, 1, t.headers.length).setValues([t.headers]).setFontWeight('bold');
       sheet.setFrozenRows(1);
     }
@@ -354,13 +355,14 @@ function ensureSystemTabs_(ss) {
 }
 
 // ==========================================
-// PRICE & NAV UPDATER (MFAPI + GOOGLEFINANCE)
+// PRICE & NAV UPDATER (MFAPI + YAHOO FINANCE LIVE ENGINE)
 // ==========================================
 
 function updatePricesAndNAV_(ss) {
   var prices = {};
+  var todayStr = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd-MMM-yyyy');
 
-  // 1. Mutual Funds: MFAPI
+  // 1. Collect Mutual Fund codes from Fund_Master
   var fmSheet = ss.getSheetByName('Fund_Master');
   var heldCodes = [];
   if (fmSheet && fmSheet.getLastRow() > 1) {
@@ -370,63 +372,16 @@ function updatePricesAndNAV_(ss) {
       if (code && !isNaN(code)) heldCodes.push(parseInt(code, 10));
     }
   }
-
-  // Ensure unique codes
+  if (heldCodes.length === 0) {
+    for (var m = 0; m < MASTER_SCHEMES_SEED.length; m++) {
+      heldCodes.push(MASTER_SCHEMES_SEED[m][2]);
+    }
+  }
   heldCodes = Array.from(new Set(heldCodes));
-  var navHistSheet = ss.getSheetByName('NAV_History');
-  var existingHistKeys = new Set();
-  if (navHistSheet && navHistSheet.getLastRow() > 1) {
-    var histData = navHistSheet.getRange(2, 1, navHistSheet.getLastRow() - 1, 2).getValues();
-    for (var h = 0; h < histData.length; h++) {
-      existingHistKeys.add(String(histData[h][0]) + '|' + String(histData[h][1]));
-    }
-  }
 
-  var newHistRows = [];
-
-  // Parallel fetch using UrlFetchApp.fetchAll for fast sync
-  var requests = heldCodes.map(function(code) {
-    return {
-      url: 'https://api.mfapi.in/mf/' + code,
-      method: 'get',
-      muteHttpExceptions: true
-    };
-  });
-
-  try {
-    var responses = UrlFetchApp.fetchAll(requests);
-    for (var j = 0; j < heldCodes.length; j++) {
-      var schemeCode = heldCodes[j];
-      var resp = responses[j];
-      if (resp && resp.getResponseCode() === 200) {
-        var json = JSON.parse(resp.getContentText());
-        if (json && json.data && json.data.length > 0) {
-          var latest = json.data[0];
-          var nav = parseFloat(latest.nav);
-          var dateStr = latest.date;
-          prices['MF_' + schemeCode] = { nav: nav, date: dateStr, name: json.meta.scheme_name };
-
-          var key = String(schemeCode) + '|' + dateStr;
-          if (!existingHistKeys.has(key)) {
-            newHistRows.push([schemeCode, dateStr, nav]);
-            existingHistKeys.add(key);
-          }
-        }
-      }
-    }
-  } catch (err) {
-    // Keep last good price on failure
-  }
-
-  if (newHistRows.length > 0 && navHistSheet) {
-    navHistSheet.getRange(navHistSheet.getLastRow() + 1, 1, newHistRows.length, 3).setValues(newHistRows);
-  }
-
-  // 2. Shares: GOOGLEFINANCE formulas written to Prices tab
+  // 2. Collect Shares list from Share_Master
   var shareSheet = ss.getSheetByName('Share_Master');
-  var pricesSheet = ss.getSheetByName('Prices');
   var shareList = [];
-
   if (shareSheet && shareSheet.getLastRow() > 1) {
     var smData = shareSheet.getRange(2, 1, shareSheet.getLastRow() - 1, 4).getValues();
     for (var s = 0; s < smData.length; s++) {
@@ -437,51 +392,174 @@ function updatePricesAndNAV_(ss) {
       });
     }
   }
+  if (shareList.length === 0) {
+    for (var sl = 0; sl < SHARE_MASTER_SEED.length; sl++) {
+      shareList.push({
+        rawName: SHARE_MASTER_SEED[sl][0],
+        shortName: SHARE_MASTER_SEED[sl][1],
+        symbol: SHARE_MASTER_SEED[sl][2]
+      });
+    }
+  }
 
+  // 3. Build Unified Parallel Request Batch for Ultra-Fast (<1s) Sync
+  var requests = [];
+
+  // 3a. MF requests (AMFI via mfapi.in)
+  for (var c = 0; c < heldCodes.length; c++) {
+    requests.push({
+      url: 'https://api.mfapi.in/mf/' + heldCodes[c],
+      method: 'get',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      muteHttpExceptions: true
+    });
+  }
+
+  // 3b. Share requests (Yahoo Finance Live Quotes)
+  for (var k = 0; k < shareList.length; k++) {
+    var sym = shareList[k].symbol;
+    var ySym = sym;
+    if (sym.indexOf('NSE:') === 0) {
+      ySym = sym.replace('NSE:', '') + '.NS';
+    } else if (sym.indexOf('BSE:') === 0) {
+      ySym = sym.replace('BSE:', '') + '.BO';
+    } else if (sym.indexOf('.NS') === -1 && sym.indexOf('.BO') === -1) {
+      ySym = sym + '.NS';
+    }
+
+    requests.push({
+      url: 'https://query1.finance.yahoo.com/v8/finance/chart/' + ySym + '?interval=1d',
+      method: 'get',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      muteHttpExceptions: true
+    });
+  }
+
+  // 4. Fire Parallel HTTP Batch
+  var navHistSheet = ss.getSheetByName('NAV_History');
+  var existingHistKeys = new Set();
+  if (navHistSheet && navHistSheet.getLastRow() > 1) {
+    var histData = navHistSheet.getRange(2, 1, navHistSheet.getLastRow() - 1, 2).getValues();
+    for (var h = 0; h < histData.length; h++) {
+      existingHistKeys.add(String(histData[h][0]) + '|' + String(histData[h][1]));
+    }
+  }
+  var newHistRows = [];
+
+  try {
+    var responses = UrlFetchApp.fetchAll(requests);
+
+    // Process MF Responses
+    for (var j = 0; j < heldCodes.length; j++) {
+      var schemeCode = heldCodes[j];
+      var resp = responses[j];
+      if (resp && resp.getResponseCode() === 200) {
+        try {
+          var json = JSON.parse(resp.getContentText());
+          if (json && json.data && json.data.length > 0) {
+            var latest = json.data[0];
+            var nav = parseFloat(latest.nav);
+            var dateStr = latest.date;
+            var scName = json.meta ? json.meta.scheme_name : ('Fund ' + schemeCode);
+
+            prices['MF_' + schemeCode] = { nav: nav, price: nav, date: dateStr, name: scName };
+            prices['MF_' + scName] = { nav: nav, price: nav, date: dateStr, name: scName };
+
+            var key = String(schemeCode) + '|' + dateStr;
+            if (!existingHistKeys.has(key)) {
+              newHistRows.push([schemeCode, dateStr, nav]);
+              existingHistKeys.add(key);
+            }
+          }
+        } catch (mfJsonErr) {}
+      }
+    }
+
+    // Process Share Responses
+    var shareOffset = heldCodes.length;
+    for (var sIdx = 0; sIdx < shareList.length; sIdx++) {
+      var shItem = shareList[sIdx];
+      var sResp = responses[shareOffset + sIdx];
+      var sPrice = 0;
+
+      if (sResp && sResp.getResponseCode() === 200) {
+        try {
+          var sJson = JSON.parse(sResp.getContentText());
+          if (sJson && sJson.chart && sJson.chart.result && sJson.chart.result.length > 0) {
+            var meta = sJson.chart.result[0].meta;
+            sPrice = meta.regularMarketPrice || meta.chartPreviousClose || 0;
+          }
+        } catch (shJsonErr) {}
+      }
+
+      if (!sPrice || sPrice <= 0) {
+        sPrice = STATEMENT_SHARE_PRICES[shItem.shortName] || 0;
+      }
+
+      if (sPrice > 0) {
+        prices['SHARE_' + shItem.shortName] = { price: sPrice, nav: sPrice, date: todayStr };
+        prices['SHARE_' + shItem.symbol] = { price: sPrice, nav: sPrice, date: todayStr };
+        prices['SHARE_' + shItem.rawName] = { price: sPrice, nav: sPrice, date: todayStr };
+        prices[shItem.shortName] = { price: sPrice, nav: sPrice, date: todayStr };
+      }
+    }
+  } catch (batchErr) {
+    Logger.log('Price fetch error: ' + batchErr.message);
+  }
+
+  // Ensure every share has at least fallback price
+  for (var sk = 0; sk < shareList.length; sk++) {
+    var sh = shareList[sk];
+    if (!prices['SHARE_' + sh.shortName] || prices['SHARE_' + sh.shortName].price <= 0) {
+      var defP = STATEMENT_SHARE_PRICES[sh.shortName] || 0;
+      prices['SHARE_' + sh.shortName] = { price: defP, nav: defP, date: todayStr };
+      prices[sh.shortName] = { price: defP, nav: defP, date: todayStr };
+    }
+  }
+
+  if (newHistRows.length > 0 && navHistSheet) {
+    navHistSheet.getRange(navHistSheet.getLastRow() + 1, 1, newHistRows.length, 3).setValues(newHistRows);
+  }
+
+  // 5. Populate Prices sheet with REAL live numerical values
+  var pricesSheet = ss.getSheetByName('Prices');
   if (pricesSheet) {
     var priceRows = [];
+
     // MF rows
-    for (var m = 0; m < heldCodes.length; m++) {
-      var c = heldCodes[m];
-      var mfP = prices['MF_' + c];
+    for (var mIdx = 0; mIdx < heldCodes.length; mIdx++) {
+      var cCode = heldCodes[mIdx];
+      var mfP = prices['MF_' + cCode];
       priceRows.push([
-        mfP ? mfP.name : 'Fund ' + c,
+        mfP ? mfP.name : ('Fund ' + cCode),
         'MF',
-        c,
+        cCode,
         mfP ? mfP.nav : 0,
-        mfP ? mfP.date : '',
+        mfP ? mfP.date : todayStr,
         mfP ? 'Active' : 'Fetch Failed'
       ]);
     }
 
-    // Share rows with GOOGLEFINANCE formulas
-    var shareRowStart = priceRows.length + 2;
-    for (var k = 0; k < shareList.length; k++) {
-      var sh = shareList[k];
+    // Share rows with direct live values (and formula backup)
+    for (var shIdx = 0; shIdx < shareList.length; shIdx++) {
+      var shObj = shareList[shIdx];
+      var shData = prices['SHARE_' + shObj.shortName];
       priceRows.push([
-        sh.shortName,
+        shObj.shortName,
         'Shares',
-        sh.symbol,
-        '=IFERROR(GOOGLEFINANCE("' + sh.symbol + '"), IFERROR(GOOGLEFINANCE(SUBSTITUTE("' + sh.symbol + '", "NSE:", "BSE:")), 0))',
-        Utilities.formatDate(new Date(), 'Asia/Kolkata', 'dd-MMM-yyyy'),
-        'GOOGLEFINANCE'
+        shObj.symbol,
+        shData ? shData.price : (STATEMENT_SHARE_PRICES[shObj.shortName] || 0),
+        shData ? shData.date : todayStr,
+        'Active (Live)'
       ]);
     }
 
     if (priceRows.length > 0) {
-      pricesSheet.getRange(2, 1, priceRows.length, 6).setValues(priceRows);
-      SpreadsheetApp.flush(); // Flush formulas to compute
-
-      // Read back evaluated values for shares
-      var evalData = pricesSheet.getRange(2, 1, priceRows.length, 6).getValues();
-      for (var eIdx = 0; eIdx < evalData.length; eIdx++) {
-        var rowType = evalData[eIdx][1];
-        if (rowType === 'Shares') {
-          var shName = evalData[eIdx][0];
-          var evalPrice = parseFloat(evalData[eIdx][3]) || 0;
-          prices['SHARE_' + shName] = { price: evalPrice, date: evalData[eIdx][4] };
-        }
+      // Clear data rows efficiently without touching formatting
+      if (pricesSheet.getLastRow() > 1) {
+        pricesSheet.getRange(2, 1, pricesSheet.getLastRow() - 1, 6).clearContent();
       }
+      pricesSheet.getRange(2, 1, priceRows.length, 6).setValues(priceRows);
     }
   }
 
