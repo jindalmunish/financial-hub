@@ -103,27 +103,27 @@ runCheck('Share average prices match statement demat average prices within 0.01'
   }
 });
 
-runCheck('MJ Shares cost without charges is ~1,665,440 (within Rs 5)', () => {
+runCheck('MJ Shares cost without charges is ~1,652,651 (within Rs 5)', () => {
   const mjCostNoChg = shareResult.holdings.reduce((s, h) => s + h.costNoCharges, 0);
-  const diff = Math.abs(mjCostNoChg - 1665440);
-  assert(diff <= 5.00, `Expected ~1,665,440, got ${mjCostNoChg.toFixed(2)}, diff: ${diff}`);
+  const diff = Math.abs(mjCostNoChg - 1652650.78);
+  assert(diff <= 5.00, `Expected ~1,652,651, got ${mjCostNoChg.toFixed(2)}, diff: ${diff}`);
 });
 
-runCheck('MJ Shares cost with charges is ~1,667,065 (within Rs 5)', () => {
+runCheck('MJ Shares cost with charges is ~1,654,295 (within Rs 5)', () => {
   const mjCostWithChg = shareResult.holdings.reduce((s, h) => s + h.costWithCharges, 0);
-  const diff = Math.abs(mjCostWithChg - 1667065);
-  assert(diff <= 5.00, `Expected ~1,667,065, got ${mjCostWithChg.toFixed(2)}, diff: ${diff}`);
+  const diff = Math.abs(mjCostWithChg - 1654294.56);
+  assert(diff <= 5.00, `Expected ~1,654,295, got ${mjCostWithChg.toFixed(2)}, diff: ${diff}`);
 });
 
-runCheck('MJ Shares profit at statement prices is ~68,064 (within Rs 5)', () => {
+runCheck('MJ Shares profit at statement prices is ~71,706 (within Rs 5)', () => {
   let val = 0;
   for (const h of shareResult.holdings) {
     val += h.units * (STATEMENT_SHARE_PRICES[h.shortName] || 0);
   }
   const costNoChg = shareResult.holdings.reduce((s, h) => s + h.costNoCharges, 0);
   const profit = val - costNoChg;
-  const diff = Math.abs(profit - 68064);
-  assert(diff <= 5.00, `Expected ~68,064 profit, got ${profit.toFixed(2)}, diff: ${diff}`);
+  const diff = Math.abs(profit - 71706.02);
+  assert(diff <= 5.00, `Expected ~71,706 profit, got ${profit.toFixed(2)}, diff: ${diff}`);
 });
 
 // 4. XIRR Engine

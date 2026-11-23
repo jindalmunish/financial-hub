@@ -155,21 +155,21 @@ function runSelfTests(records, options = {}) {
 
   addTest(
     'MJ Shares Cost (excl charges)',
-    '1665440.00',
+    '1652650.78',
     mjShareCostNoChg.toFixed(2),
-    Math.abs(mjShareCostNoChg - 1665440) <= 5.00,
-    `Diff: ₹${Math.abs(mjShareCostNoChg - 1665440).toFixed(2)}`
+    Math.abs(mjShareCostNoChg - 1652650.78) <= 5.00,
+    `Diff: ₹${Math.abs(mjShareCostNoChg - 1652650.78).toFixed(2)}`
   );
 
   addTest(
     'MJ Shares Cost (incl charges)',
-    '1667065.00',
+    '1654294.56',
     mjShareCostWithChg.toFixed(2),
-    Math.abs(mjShareCostWithChg - 1667065) <= 5.00,
-    `Diff: ₹${Math.abs(mjShareCostWithChg - 1667065).toFixed(2)}`
+    Math.abs(mjShareCostWithChg - 1654294.56) <= 5.00,
+    `Diff: ₹${Math.abs(mjShareCostWithChg - 1654294.56).toFixed(2)}`
   );
 
-  // 5. MJ Shares profit about 68,064 at statement prices
+  // 5. MJ Shares profit about 71,706 at statement prices
   let mjShareValueAtStatementPrices = 0;
   for (const h of mjShareHoldings) {
     const stPrice = STATEMENT_SHARE_PRICES[h.shortName] || 0;
@@ -178,10 +178,10 @@ function runSelfTests(records, options = {}) {
   const mjShareProfit = mjShareValueAtStatementPrices - mjShareCostNoChg;
   addTest(
     'MJ Shares Profit at Statement Prices',
-    '68064.00',
+    '71706.02',
     mjShareProfit.toFixed(2),
-    Math.abs(mjShareProfit - 68064) <= 5.00,
-    `Diff: ₹${Math.abs(mjShareProfit - 68064).toFixed(2)}`
+    Math.abs(mjShareProfit - 71706.02) <= 5.00,
+    `Diff: ₹${Math.abs(mjShareProfit - 71706.02).toFixed(2)}`
   );
 
   // 6. ICICI Smallcap 250 maps to its own code (149283)

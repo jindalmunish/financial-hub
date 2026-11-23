@@ -606,52 +606,52 @@ function getFallbackMarketDepthData_(liveOverrides) {
   liveOverrides = liveOverrides || {};
   var now = new Date();
   var nowStr = Utilities.formatDate(now, 'Asia/Kolkata', 'dd-MMM-yyyy HH:mm:ss') + ' IST';
-  var n50_close = liveOverrides.n50 ? parseFloat(liveOverrides.n50) : 25800.60;
-  var vix_cur = liveOverrides.vix ? parseFloat(liveOverrides.vix) : 17.32;
-  var usdinr_cur = liveOverrides.usdinr ? parseFloat(liveOverrides.usdinr) : 93.29;
+  var n50_close = liveOverrides.n50 ? parseFloat(liveOverrides.n50) : 25349.65;
+  var vix_cur = liveOverrides.vix ? parseFloat(liveOverrides.vix) : 17.70;
+  var usdinr_cur = liveOverrides.usdinr ? parseFloat(liveOverrides.usdinr) : 92.90;
 
   return {
     status: 'SUCCESS',
-    asOfDate: '20-Nov-2026',
-    lastDate: '20-Nov-2026',
-    prevDate: '19-Nov-2026',
+    asOfDate: '23-Nov-2026',
+    lastDate: '23-Nov-2026',
+    prevDate: '20-Nov-2026',
     updatedAt: nowStr,
-    compositeScore: 66,
+    compositeScore: 64,
     compositeVerdict: 'FAVORABLE TO ACCUMULATE',
-    compositeDesc: 'India VIX calm at ' + vix_cur.toFixed(2) + ' and FII flows positive (+₹10,308 Cr). Large-cap multiples and Silver offer strong margin of safety.',
+    compositeDesc: 'India VIX controlled at ' + vix_cur.toFixed(2) + ' and Large Caps trading at favorable 20.65 P/E. Silver and Large Cap Index tranches offer strong margin of safety.',
     allocation: { largeCap: 45, midSmall: 15, bullion: 15, debtCash: 25 },
     macroFactors: [
-      { id: 'vix', category: 'Volatility & Sentiment', name: 'India VIX', current: vix_cur.toFixed(2), prev: '16.11', changePct: parseFloat((((vix_cur - 16.11)/16.11)*100).toFixed(2)), unit: 'pts', score: 69, verdict: 'Calm / Controlled', desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.' },
-      { id: 'fii', category: 'Institutional Liquidity', name: 'Net FII / FPI Flows', current: '+₹10,308.42 Cr', prev: '+₹7,411.41 Cr', changePct: 39.09, unit: 'Cr', score: 92, verdict: 'Heavy Inflow (Bullish)', desc: 'Foreign institutions net cash flow: +₹10,308.42 Cr.' },
-      { id: 'dii', category: 'Institutional Liquidity', name: 'Net DII Flows', current: '-₹4,859.80 Cr', prev: '-₹1,356.57 Cr', changePct: -258.24, unit: 'Cr', score: 45, verdict: 'Profit Booking / Rebalance', desc: 'Domestic mutual funds net cash flow: -₹4,859.80 Cr.' },
-      { id: 'gsec', category: 'Macro Interest Rates', name: 'India 10Y G-Sec Yield', current: '7.05%', prev: '7.05%', changePct: 0.00, unit: '%', score: 64, verdict: 'Stable Anchor', desc: 'Benchmark sovereign 10Y borrowing rate holds steady at 7.05%.' },
-      { id: 'usdinr', category: 'Macro Currency', name: 'USD / INR Exchange Rate', current: '₹' + usdinr_cur.toFixed(2), prev: '₹93.47', changePct: parseFloat((((usdinr_cur - 93.47)/93.47)*100).toFixed(2)), unit: 'INR', score: 54, verdict: 'Rangebound', desc: 'Rupee trading steady supported by active RBI foreign exchange buffers.' },
-      { id: 'crude', category: 'Energy & Trade Deficit', name: 'Crude Oil (Brent)', current: '$87.40', prev: '$88.20', changePct: -0.91, unit: '$/bbl', score: 74, verdict: 'Favorable Range', desc: 'Brent crude at $87.40 keeps energy inflation in check.' },
+      { id: 'vix', category: 'Volatility & Sentiment', name: 'India VIX', current: vix_cur.toFixed(2), prev: '17.32', changePct: parseFloat((((vix_cur - 17.32)/17.32)*100).toFixed(2)), unit: 'pts', score: 67, verdict: 'Calm / Controlled', desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.' },
+      { id: 'fii', category: 'Institutional Liquidity', name: 'Net FII / FPI Flows', current: '-₹1,245.80 Cr', prev: '+₹10,308.42 Cr', changePct: -112.09, unit: 'Cr', score: 45, verdict: 'Net Selling', desc: 'Foreign institutions net cash flow: -₹1,245.80 Cr.' },
+      { id: 'dii', category: 'Institutional Liquidity', name: 'Net DII Flows', current: '+₹3,450.20 Cr', prev: '-₹4,859.80 Cr', changePct: 171.00, unit: 'Cr', score: 75, verdict: 'Domestic Buying', desc: 'Domestic mutual funds net cash flow: +₹3,450.20 Cr absorbing foreign supply.' },
+      { id: 'gsec', category: 'Macro Interest Rates', name: 'India 10Y G-Sec Yield', current: '7.04%', prev: '7.05%', changePct: -0.14, unit: '%', score: 64, verdict: 'Stable Anchor', desc: 'Benchmark sovereign 10Y borrowing rate holds steady at 7.04%.' },
+      { id: 'usdinr', category: 'Macro Currency', name: 'USD / INR Exchange Rate', current: '₹' + usdinr_cur.toFixed(2), prev: '₹93.29', changePct: parseFloat((((usdinr_cur - 93.29)/93.29)*100).toFixed(2)), unit: 'INR', score: 56, verdict: 'Rangebound', desc: 'Rupee trading steady supported by active RBI foreign exchange buffers.' },
+      { id: 'crude', category: 'Energy & Trade Deficit', name: 'Crude Oil (Brent)', current: '$87.20', prev: '$87.40', changePct: -0.23, unit: '$/bbl', score: 74, verdict: 'Favorable Range', desc: 'Brent crude at $87.20 keeps energy inflation in check.' },
       { id: 'gold', category: 'Precious Metals', name: 'Gold (24K · 10 grams)', current: '₹1,29,531', prev: '₹1,29,531', changePct: 0.00, unit: '₹/10g', score: 58, verdict: 'Core Wealth Preserver', desc: 'Official IBJA benchmark ₹1,29,531 per 10g (24K purity). Strategic hedge.' },
       { id: 'silver', category: 'Precious Metals', name: 'Silver (999 · 1 Kilogram)', current: '₹1,60,439', prev: '₹1,60,439', changePct: 0.00, unit: '₹/1kg', score: 74, verdict: 'Good to Buy (Deep Value)', desc: 'Official IBJA benchmark ₹1,60,439 per 1kg. High industrial pull and discount vs gold.' },
       { id: 'gsr', category: 'Relative Bullion', name: 'Gold / Silver Ratio (GSR)', current: '80.74', prev: '80.74', changePct: 0.00, unit: 'Ratio', score: 84, verdict: 'Silver Deeply Discounted', desc: 'At 80.74, Silver is trading at a steep historic discount to Gold. Tactical accumulation favored.' },
-      { id: 'buffett', category: 'Macro Valuation', name: 'Buffett Indicator (M-Cap/GDP)', current: '117.8%', prev: '118.0%', changePct: -0.17, unit: '%', score: 44, verdict: 'Moderately Elevated', desc: 'India total Market Cap to GDP at 117.8%. High smallcap froth.' },
-      { id: 'yield_gap', category: 'Equity Risk Premium', name: 'Bond-Equity Yield Gap', current: '-2.29%', prev: '-2.24%', changePct: -2.23, unit: '%', score: 70, verdict: 'Favorable Equity ERP', desc: 'Equity earnings yield (4.76%) relative to 7.05% G-Sec maintains solid risk premium.' }
+      { id: 'buffett', category: 'Macro Valuation', name: 'Buffett Indicator (M-Cap/GDP)', current: '117.2%', prev: '117.8%', changePct: -0.51, unit: '%', score: 44, verdict: 'Moderately Elevated', desc: 'India total Market Cap to GDP at 117.2%. Moderate froth in small caps.' },
+      { id: 'yield_gap', category: 'Equity Risk Premium', name: 'Bond-Equity Yield Gap', current: '-2.20%', prev: '-2.29%', changePct: 3.93, unit: '%', score: 70, verdict: 'Favorable Equity ERP', desc: 'Equity earnings yield (4.84%) relative to 7.04% G-Sec maintains solid risk premium.' }
     ],
     factors: [
-      { id: 'vix', category: 'Volatility & Sentiment', name: 'India VIX', current: vix_cur.toFixed(2), prev: '16.11', changePct: parseFloat((((vix_cur - 16.11)/16.11)*100).toFixed(2)), unit: 'pts', score: 69, verdict: 'Calm / Controlled', desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.' },
-      { id: 'fii', category: 'Institutional Liquidity', name: 'Net FII / FPI Flows', current: '+₹10,308.42 Cr', prev: '+₹7,411.41 Cr', changePct: 39.09, unit: 'Cr', score: 92, verdict: 'Heavy Inflow (Bullish)', desc: 'Foreign institutions net cash flow: +₹10,308.42 Cr.' },
-      { id: 'dii', category: 'Institutional Liquidity', name: 'Net DII Flows', current: '-₹4,859.80 Cr', prev: '-₹1,356.57 Cr', changePct: -258.24, unit: 'Cr', score: 45, verdict: 'Profit Booking / Rebalance', desc: 'Domestic mutual funds net cash flow: -₹4,859.80 Cr.' },
-      { id: 'gsec', category: 'Macro Interest Rates', name: 'India 10Y G-Sec Yield', current: '7.05%', prev: '7.05%', changePct: 0.00, unit: '%', score: 64, verdict: 'Stable Anchor', desc: 'Benchmark sovereign 10Y borrowing rate holds steady at 7.05%.' },
-      { id: 'usdinr', category: 'Macro Currency', name: 'USD / INR Exchange Rate', current: '₹' + usdinr_cur.toFixed(2), prev: '₹93.47', changePct: parseFloat((((usdinr_cur - 93.47)/93.47)*100).toFixed(2)), unit: 'INR', score: 54, verdict: 'Rangebound', desc: 'Rupee trading steady supported by active RBI foreign exchange buffers.' },
-      { id: 'crude', category: 'Energy & Trade Deficit', name: 'Crude Oil (Brent)', current: '$87.40', prev: '$88.20', changePct: -0.91, unit: '$/bbl', score: 74, verdict: 'Favorable Range', desc: 'Brent crude at $87.40 keeps energy inflation in check.' },
+      { id: 'vix', category: 'Volatility & Sentiment', name: 'India VIX', current: vix_cur.toFixed(2), prev: '17.32', changePct: parseFloat((((vix_cur - 17.32)/17.32)*100).toFixed(2)), unit: 'pts', score: 67, verdict: 'Calm / Controlled', desc: 'Sub-18 level indicates calm volatility environment with low hedging anxiety.' },
+      { id: 'fii', category: 'Institutional Liquidity', name: 'Net FII / FPI Flows', current: '-₹1,245.80 Cr', prev: '+₹10,308.42 Cr', changePct: -112.09, unit: 'Cr', score: 45, verdict: 'Net Selling', desc: 'Foreign institutions net cash flow: -₹1,245.80 Cr.' },
+      { id: 'dii', category: 'Institutional Liquidity', name: 'Net DII Flows', current: '+₹3,450.20 Cr', prev: '-₹4,859.80 Cr', changePct: 171.00, unit: 'Cr', score: 75, verdict: 'Domestic Buying', desc: 'Domestic mutual funds net cash flow: +₹3,450.20 Cr absorbing foreign supply.' },
+      { id: 'gsec', category: 'Macro Interest Rates', name: 'India 10Y G-Sec Yield', current: '7.04%', prev: '7.05%', changePct: -0.14, unit: '%', score: 64, verdict: 'Stable Anchor', desc: 'Benchmark sovereign 10Y borrowing rate holds steady at 7.04%.' },
+      { id: 'usdinr', category: 'Macro Currency', name: 'USD / INR Exchange Rate', current: '₹' + usdinr_cur.toFixed(2), prev: '₹93.29', changePct: parseFloat((((usdinr_cur - 93.29)/93.29)*100).toFixed(2)), unit: 'INR', score: 56, verdict: 'Rangebound', desc: 'Rupee trading steady supported by active RBI foreign exchange buffers.' },
+      { id: 'crude', category: 'Energy & Trade Deficit', name: 'Crude Oil (Brent)', current: '$87.20', prev: '$87.40', changePct: -0.23, unit: '$/bbl', score: 74, verdict: 'Favorable Range', desc: 'Brent crude at $87.20 keeps energy inflation in check.' },
       { id: 'gold', category: 'Precious Metals', name: 'Gold (24K · 10 grams)', current: '₹1,29,531', prev: '₹1,29,531', changePct: 0.00, unit: '₹/10g', score: 58, verdict: 'Core Wealth Preserver', desc: 'Official IBJA benchmark ₹1,29,531 per 10g (24K purity). Strategic hedge.' },
       { id: 'silver', category: 'Precious Metals', name: 'Silver (999 · 1 Kilogram)', current: '₹1,60,439', prev: '₹1,60,439', changePct: 0.00, unit: '₹/1kg', score: 74, verdict: 'Good to Buy (Deep Value)', desc: 'Official IBJA benchmark ₹1,60,439 per 1kg. High industrial pull and discount vs gold.' },
       { id: 'gsr', category: 'Relative Bullion', name: 'Gold / Silver Ratio (GSR)', current: '80.74', prev: '80.74', changePct: 0.00, unit: 'Ratio', score: 84, verdict: 'Silver Deeply Discounted', desc: 'At 80.74, Silver is trading at a steep historic discount to Gold. Tactical accumulation favored.' },
-      { id: 'buffett', category: 'Macro Valuation', name: 'Buffett Indicator (M-Cap/GDP)', current: '117.8%', prev: '118.0%', changePct: -0.17, unit: '%', score: 44, verdict: 'Moderately Elevated', desc: 'India total Market Cap to GDP at 117.8%. High smallcap froth.' },
-      { id: 'yield_gap', category: 'Equity Risk Premium', name: 'Bond-Equity Yield Gap', current: '-2.29%', prev: '-2.24%', changePct: -2.23, unit: '%', score: 70, verdict: 'Favorable Equity ERP', desc: 'Equity earnings yield (4.76%) relative to 7.05% G-Sec maintains solid risk premium.' }
+      { id: 'buffett', category: 'Macro Valuation', name: 'Buffett Indicator (M-Cap/GDP)', current: '117.2%', prev: '117.8%', changePct: -0.51, unit: '%', score: 44, verdict: 'Moderately Elevated', desc: 'India total Market Cap to GDP at 117.2%. Moderate froth in small caps.' },
+      { id: 'yield_gap', category: 'Equity Risk Premium', name: 'Bond-Equity Yield Gap', current: '-2.20%', prev: '-2.29%', changePct: 3.93, unit: '%', score: 70, verdict: 'Favorable Equity ERP', desc: 'Equity earnings yield (4.84%) relative to 7.04% G-Sec maintains solid risk premium.' }
     ],
     indices: [
-      { serial: 1, name: 'Nifty 50', close: n50_close.toLocaleString('en-IN', {minimumFractionDigits: 2}), prevClose: '25,514.30', changePct: parseFloat((((n50_close - 25514.30) / 25514.30) * 100).toFixed(2)), pe: (21.02 * (n50_close / 25800.60)).toFixed(2), pb: '3.17', dy: '1.32%', eps: '₹1,227.43', yieldGap: '-2.29%', spread: '1.00x', score: 68, regime: 'FAVORABLE / ACCUMULATE', action: 'Regular SIP + Lump-sum Tranche 1' },
-      { serial: 2, name: 'Nifty Next 50', close: '73,207.25', prevClose: '72,889.75', changePct: 0.44, pe: '17.75', pb: '3.52', dy: '1.37%', eps: '₹4,124.35', yieldGap: '-1.42%', spread: '0.84x', score: 72, regime: 'FAVORABLE / ACCUMULATE', action: 'Regular SIP + Lump-sum Tranche 1' },
-      { serial: 3, name: 'Nifty Midcap 150', close: '22,750.80', prevClose: '22,613.85', changePct: 0.61, pe: '28.21', pb: '3.99', dy: '0.93%', eps: '₹806.48', yieldGap: '-3.51%', spread: '1.34x', score: 32, regime: 'OVERVALUED / CAUTION', action: 'Cut SIP to 0.5x; trim 20%-30% profits into Large Cap' },
-      { serial: 4, name: 'Nifty Smallcap 250', close: '17,785.50', prevClose: '17,802.90', changePct: -0.10, pe: '32.14', pb: '3.43', dy: '0.75%', eps: '₹553.38', yieldGap: '-3.94%', spread: '1.53x', score: 24, regime: 'OVERVALUED / CAUTION', action: 'Cut SIP to 0.5x; trim 20%-30% profits into Large Cap' },
-      { serial: 5, name: 'Nifty 500', close: '24,088.80', prevClose: '23,897.15', changePct: 0.80, pe: '22.50', pb: '3.37', dy: '1.19%', eps: '₹1,070.61', yieldGap: '-2.61%', spread: '1.07x', score: 60, regime: 'NEUTRAL / FAIR VALUE', action: 'Maintain baseline SIP; pause fresh lumpsum' }
+      { serial: 1, name: 'Nifty 50', close: n50_close.toLocaleString('en-IN', {minimumFractionDigits: 2}), prevClose: '25,800.60', changePct: parseFloat((((n50_close - 25800.60) / 25800.60) * 100).toFixed(2)), pe: (20.65 * (n50_close / 25349.65)).toFixed(2), pb: '3.11', dy: '1.34%', eps: '₹1,227.43', yieldGap: '-2.20%', spread: '1.00x', score: 68, regime: 'FAVORABLE / ACCUMULATE', action: 'Regular SIP + Lump-sum Tranche 1' },
+      { serial: 2, name: 'Nifty Next 50', close: '72,245.40', prevClose: '73,207.25', changePct: -1.31, pe: '17.52', pb: '3.47', dy: '1.39%', eps: '₹4,124.35', yieldGap: '-1.33%', spread: '0.85x', score: 72, regime: 'FAVORABLE / ACCUMULATE', action: 'Regular SIP + Lump-sum Tranche 1' },
+      { serial: 3, name: 'Nifty Midcap 150', close: '22,636.80', prevClose: '22,750.80', changePct: -0.50, pe: '28.07', pb: '3.97', dy: '0.93%', eps: '₹806.48', yieldGap: '-3.48%', spread: '1.36x', score: 32, regime: 'OVERVALUED / CAUTION', action: 'Cut SIP to 0.5x; trim 20%-30% profits into Large Cap' },
+      { serial: 4, name: 'Nifty Smallcap 250', close: '17,732.10', prevClose: '17,785.50', changePct: -0.30, pe: '32.04', pb: '3.42', dy: '0.75%', eps: '₹553.38', yieldGap: '-3.92%', spread: '1.55x', score: 24, regime: 'OVERVALUED / CAUTION', action: 'Cut SIP to 0.5x; trim 20%-30% profits into Large Cap' },
+      { serial: 5, name: 'Nifty 500', close: '23,748.15', prevClose: '24,088.80', changePct: -1.41, pe: '22.18', pb: '3.32', dy: '1.21%', eps: '₹1,070.61', yieldGap: '-2.53%', spread: '1.07x', score: 60, regime: 'NEUTRAL / FAIR VALUE', action: 'Maintain baseline SIP; pause fresh lumpsum' }
     ]
   };
 }
