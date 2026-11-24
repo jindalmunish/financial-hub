@@ -124,6 +124,8 @@ var SETTINGS_SEED_DATA = [
 function onOpen(e) {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('MJ Portfolio')
+    .addItem('⚡ Format Transection (Clean CSV Style)', 'formatTransectionSheet')
+    .addSeparator()
     .addItem('Update now', 'runUpdateNow')
     .addItem('Run self test', 'runSelfTestMenu')
     .addItem('Reconcile portfolio gaps', 'runReconciliationMenu')
@@ -149,20 +151,153 @@ function onOpen(e) {
 }
 
 /**
- * Simple trigger: Notifies user when new transactions are added to Transection tab.
+ * Simple trigger: Intercepts edits on Transection tab (including format button click).
  */
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
     var sheet = e.range.getSheet();
     if (sheet && sheet.getName() === 'Transection') {
+      // Check if format trigger checkbox in J1 was clicked (checked)
+      if (e.range.getA1Notation() === 'J1') {
+        if (e.value === 'TRUE' || e.value === true) {
+          formatTransectionSheet();
+          e.range.setValue(false);
+          SpreadsheetApp.getActiveSpreadsheet().toast('✅ Transection sheet formatted! (Clean CSV style, dd-mmm-yyyy dates, whole amounts)', 'Formatted', 5);
+          return;
+        }
+      }
       SpreadsheetApp.getActiveSpreadsheet().toast(
         'Transaction edited! Remember to click "MJ Portfolio > Update now" or click Update in your Web App to refresh all calculations.',
         'Master Sheet Modified',
-        8
+        6
       );
     }
   } catch (err) {}
+}
+
+/**
+ * Interactive: Formats the master "Transection" tab in simple, clean CSV style.
+ * - Dates (Col E): dd-mmm-yyyy (e.g. 20-Nov-2026)
+ * - NAV/Price (Col F): #,##0.00
+ * - Units (Col G): #,##0.000
+ * - Amount (Col H): #,##0 (Integer only, NO decimals)
+ * - Charges (Col I): #,##0.00
+ * - Button in top frozen row (J1 Checkbox + K1 Label): always visible when scrolling.
+ */
+function formatTransectionSheet() {
+  var ss = getSpreadsheet_();
+  var sheet = ss.getSheetByName('Transection');
+  if (!sheet) return;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 1) return;
+
+  // 1. Ensure top row is frozen so button & headers are ALWAYS visible
+  sheet.setFrozenRows(1);
+
+  // 2. Format Header Row (Row 1, Cols A to I)
+  var headerRange = sheet.getRange(1, 1, 1, 9);
+  headerRange
+    .setFontFamily('Arial')
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setFontColor('#1E293B')
+    .setBackground('#F1F5F9')
+    .setVerticalAlignment('middle');
+
+  sheet.getRange('A1:B1').setHorizontalAlignment('center');
+  sheet.getRange('C1:D1').setHorizontalAlignment('left');
+  sheet.getRange('E1').setHorizontalAlignment('center');
+  sheet.getRange('F1:I1').setHorizontalAlignment('right');
+
+  // 3. Button / Checkbox in J1 & K1 (Always Visible in Frozen Top Row)
+  var btnCell = sheet.getRange('J1');
+  btnCell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
+  btnCell.setValue(false);
+  btnCell.setBackground('#F1F5F9');
+  btnCell.setHorizontalAlignment('center');
+  btnCell.setVerticalAlignment('middle');
+  btnCell.setNote('Click / check this box anytime to format newly copy-pasted entries.');
+
+  var btnLabel = sheet.getRange('K1');
+  btnLabel
+    .setValue('⚡ Format New Entries')
+    .setFontFamily('Arial')
+    .setFontSize(10)
+    .setFontWeight('bold')
+    .setFontColor('#0284C7')
+    .setBackground('#F1F5F9')
+    .setHorizontalAlignment('left')
+    .setVerticalAlignment('middle')
+    .setNote('Click the checkbox in J1 or run MJ Portfolio > ⚡ Format Transection to format all entries.');
+
+  if (lastRow < 2) return;
+
+  var numDataRows = lastRow - 1;
+
+  // 4. Data Range Format (Clean CSV style: Arial 10pt, white background)
+  var dataRange = sheet.getRange(2, 1, numDataRows, 9);
+  dataRange
+    .setFontFamily('Arial')
+    .setFontSize(10)
+    .setFontColor('#0F172A')
+    .setBackground('#FFFFFF')
+    .setVerticalAlignment('middle');
+
+  sheet.getRange(2, 1, numDataRows, 2).setHorizontalAlignment('center'); // Who, Type
+  sheet.getRange(2, 3, numDataRows, 2).setHorizontalAlignment('left');   // Scheme Name, Desc
+  sheet.getRange(2, 5, numDataRows, 1).setHorizontalAlignment('center'); // Date
+  sheet.getRange(2, 6, numDataRows, 4).setHorizontalAlignment('right');  // NAV, Units, Amount, Charges
+
+  // 5. Date Column Normalization (Col E)
+  var dateRange = sheet.getRange(2, 5, numDataRows, 1);
+  var dateValues = dateRange.getValues();
+  var months = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+  var datesChanged = false;
+
+  for (var r = 0; r < dateValues.length; r++) {
+    var raw = dateValues[r][0];
+    if (raw instanceof Date) continue;
+    if (typeof raw === 'string') {
+      var s = raw.trim();
+      var parts = s.split(/[-/ ]/);
+      if (parts.length === 3) {
+        var d = parseInt(parts[0], 10);
+        var mStr = parts[1].toLowerCase().slice(0, 3);
+        var m = months[mStr];
+        var y = parseInt(parts[2], 10);
+        if (!isNaN(d) && m !== undefined && !isNaN(y)) {
+          if (y < 100) y += 2000;
+          dateValues[r][0] = new Date(y, m, d);
+          datesChanged = true;
+        }
+      }
+    }
+  }
+  if (datesChanged) {
+    dateRange.setValues(dateValues);
+  }
+  dateRange.setNumberFormat('dd-mmm-yyyy');
+
+  // 6. Number Formatting
+  sheet.getRange(2, 6, numDataRows, 1).setNumberFormat('#,##0.00');  // NAV/Price
+  sheet.getRange(2, 7, numDataRows, 1).setNumberFormat('#,##0.000'); // Units
+  sheet.getRange(2, 8, numDataRows, 1).setNumberFormat('#,##0');     // Amount (NO DECIMALS)
+  sheet.getRange(2, 9, numDataRows, 1).setNumberFormat('#,##0.00');  // Charges
+
+  // 7. Column Widths
+  sheet.setColumnWidth(1, 65);  // Who
+  sheet.setColumnWidth(2, 75);  // Type
+  sheet.setColumnWidth(3, 340); // Scheme Name
+  sheet.setColumnWidth(4, 280); // Desc
+  sheet.setColumnWidth(5, 110); // Date
+  sheet.setColumnWidth(6, 95);  // NAV/Price
+  sheet.setColumnWidth(7, 95);  // Units
+  sheet.setColumnWidth(8, 105); // Amount
+  sheet.setColumnWidth(9, 85);  // Charges
+  sheet.setColumnWidth(10, 35); // Checkbox
+  sheet.setColumnWidth(11, 160);// Label
 }
 
 function runReconciliationMenu() {
